@@ -1,5 +1,6 @@
 #pragma once
 #include "lanelet2_io/io_handlers/Parser.h"
+#include <pugixml.hpp>
 
 namespace lanelet {
 namespace io_handlers {
@@ -16,6 +17,8 @@ class CpmParser : public Parser {
   static constexpr const char* extension() { return ".xml"; }
 
   static constexpr const char* name() { return "cpm_handler"; }
+
+  LineString3d parseBound(pugi::xml_node xml_boundary) const ;
 };
 
 }  // namespace io_handlers
