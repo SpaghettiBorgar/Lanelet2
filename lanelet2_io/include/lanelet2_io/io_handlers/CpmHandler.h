@@ -1,6 +1,7 @@
 #pragma once
-#include "lanelet2_io/io_handlers/Parser.h"
 #include <pugixml.hpp>
+
+#include "lanelet2_io/io_handlers/Parser.h"
 
 namespace lanelet {
 namespace io_handlers {
@@ -18,7 +19,9 @@ class CpmParser : public Parser {
 
   static constexpr const char* name() { return "cpm_handler"; }
 
-  LineString3d parseBound(pugi::xml_node xml_boundary) const ;
+ private:
+  LineString3d parseBound(pugi::xml_node xml_boundary, std::unique_ptr<LaneletMap>& map) const;
+  Point3d parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map) const;
 };
 
 }  // namespace io_handlers

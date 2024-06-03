@@ -1,5 +1,7 @@
 #include "lanelet2_io/io_handlers/CpmHandler.h"
 
+#include <lanelet2_core/geometry/Point.h>
+
 #include <boost/geometry/algorithms/is_valid.hpp>
 #include <fstream>
 #include <iostream>
@@ -9,6 +11,8 @@
 
 #include "lanelet2_io/Exceptions.h"
 #include "lanelet2_io/io_handlers/Factory.h"
+
+#define POINT_MERGE_DISTANCE 0.001
 
 using namespace std::string_literals;
 
@@ -31,19 +35,38 @@ PolygonLayer::Map polygons_;
 LineStringLayer::Map lineStrings_;
 PointLayer::Map points_;
 
-LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary) const {
+Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map) const {
+  auto x = std::stod(xml_point.child("x").child_value());
+  auto y = std::stod(xml_point.child("y").child_value());
+  Point3d point = Point3d(InvalId, x, y, 0);
+  bool merged = false;
+
+  auto nearests = map->pointLayer.nearest(point, 1);
+  if (nearests.size() >= 1) {
+    auto nearest = nearests[0];
+    auto distance = geometry::distance(point, nearest);
+    printf("Point: (%d) %f %f  Nearest: (%d) %f %f (distance %f)\n", pointID_incrementor, x, y, nearest.id(),
+           nearest.x(), nearest.y(), distance);
+
+    merged = distance < POINT_MERGE_DISTANCE;
+    if (merged) point = nearest;
+  }
+
+  if (!merged) {
+    point.setId(++pointID_incrementor);
+    map->add(point);
+  }
+
+  return point;
+}
+
+LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<LaneletMap>& map) const {
   std::vector<Point3d> boundary_points;
   for (auto xml_point = xml_boundary.child("point"); xml_point; xml_point = xml_point.next_sibling("point")) {
-    auto x = std::stod(xml_point.child("x").child_value());
-    auto y = std::stod(xml_point.child("y").child_value());
-    Id pointID = ++pointID_incrementor;
-    auto point = Point3d(pointID, BasicPoint3d(x, y, 0));
-
+    auto point = parsePoint(xml_point, map);
     boundary_points.push_back(point);
-    points_.emplace(pointID, point);
   }
   Id lineStringID = ++lineStringID_incrementor;
-
   AttributeMap attributes;
   attributes.insert(std::make_pair("type", "line_thin"));
   // assumes only "solid" or "dashed" attributes are used
@@ -61,19 +84,19 @@ std::unique_ptr<LaneletMap> CpmParser::parse(const std::string& filename, ErrorM
   if (!result) {
     throw lanelet::ParseError("Errors occured while parsing xml file: "s + result.description());
   }
-  // TODO collate nodes
+
   // TODO align linestrings
   // TODO investigate inverted lanelets
   // TODO predecessor/successor validation
-
+  std::unique_ptr<LaneletMap> map = std::make_unique<LaneletMap>();
   auto xml_commonRoad = doc.child("commonRoad");
   try {
     for (auto xml_lanelet = xml_commonRoad.child("lanelet"); xml_lanelet;
          xml_lanelet = xml_lanelet.next_sibling("lanelet")) {
-      auto leftBound = parseBound(xml_lanelet.child("leftBound"));
-      auto rightBound = parseBound(xml_lanelet.child("rightBound"));
-      lineStrings_.emplace(leftBound.id(), leftBound);
-      lineStrings_.emplace(rightBound.id(), rightBound);
+      auto leftBound = parseBound(xml_lanelet.child("leftBound"), map);
+      auto rightBound = parseBound(xml_lanelet.child("rightBound"), map);
+      map->add(leftBound);
+      map->add(rightBound);
 
       static const std::unordered_map<std::string, std::string> lanelet_type_map{{"urban", "road"},
                                                                                  {"highway", "highway"}};
@@ -82,13 +105,11 @@ std::unique_ptr<LaneletMap> CpmParser::parse(const std::string& filename, ErrorM
       attributes.insert(std::make_pair("subtype", lanelet_type_map.at(xml_lanelet.child("laneletType").child_value())));
 
       auto lanelet = Lanelet(xml_lanelet.attribute("id").as_llong(InvalId), leftBound, rightBound, attributes);
-      lanelets_.emplace(lanelet.id(), lanelet);
+      map->add(lanelet);
     }
   } catch (std::exception e) {
     throw ParseError(e.what());
   }
-
-  auto map = std::make_unique<LaneletMap>(lanelets_, areas_, regulatoryElements_, polygons_, lineStrings_, points_);
 
   return map;
 }
