@@ -11,6 +11,7 @@
 
 #include "lanelet2_io/Exceptions.h"
 #include "lanelet2_io/io_handlers/Factory.h"
+#include "lanelet2_core/utility/Optional.h"
 
 #define POINT_MERGE_DISTANCE 0.001
 
@@ -35,7 +36,7 @@ PolygonLayer::Map polygons_;
 LineStringLayer::Map lineStrings_;
 PointLayer::Map points_;
 
-Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map) const {
+Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map, Optional<Point3d> previousPoint) const {
   auto x = std::stod(xml_point.child("x").child_value());
   auto y = std::stod(xml_point.child("y").child_value());
   Point3d point = Point3d(InvalId, x, y, 0);
@@ -48,7 +49,9 @@ Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletM
     // printf("Point: (%d) %f %f  Nearest: (%d) %f %f (distance %f)\n", pointID_incrementor, x, y, nearest.id(),
     //  nearest.x(), nearest.y(), distance);
 
-    merged = distance < POINT_MERGE_DISTANCE;
+    // Avoid linestrings having duplicate consecutive points
+    bool nearest_is_previous = previousPoint && nearest.id() == previousPoint->id();
+    merged = distance < POINT_MERGE_DISTANCE && !nearest_is_previous;
     if (merged) point = nearest;
   }
 
@@ -65,9 +68,12 @@ LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<
   bool no_new_points = true;
   LineString3d linestring;
 
+  Optional<Point3d> previousPoint = {};
   for (auto xml_point = xml_boundary.child("point"); xml_point; xml_point = xml_point.next_sibling("point")) {
     Id old_pointID_incrementor = pointID_incrementor;
-    auto point = parsePoint(xml_point, map);
+    auto point = parsePoint(xml_point, map, previousPoint);
+    assert(!previousPoint || point != *previousPoint);
+    previousPoint = point;
     boundary_points.push_back(point);
     if (pointID_incrementor != old_pointID_incrementor) no_new_points = false;
   }

@@ -21,7 +21,7 @@ class CpmParser : public Parser {
 
  private:
   LineString3d parseBound(pugi::xml_node xml_boundary, std::unique_ptr<LaneletMap>& map) const;
-  Point3d parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map) const;
+  Point3d parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map, Optional<Point3d> previousPoint = {}) const;
 };
 
 }  // namespace io_handlers
