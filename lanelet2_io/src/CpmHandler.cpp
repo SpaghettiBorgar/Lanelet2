@@ -13,7 +13,7 @@
 #include "lanelet2_io/io_handlers/Factory.h"
 #include "lanelet2_core/utility/Optional.h"
 
-#define POINT_MERGE_DISTANCE 0.001
+#define POINT_MERGE_DISTANCE 0.0005
 
 using namespace std::string_literals;
 
@@ -71,8 +71,9 @@ LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<
   Optional<Point3d> previousPoint = {};
   for (auto xml_point = xml_boundary.child("point"); xml_point; xml_point = xml_point.next_sibling("point")) {
     Id old_pointID_incrementor = pointID_incrementor;
-    auto point = parsePoint(xml_point, map, previousPoint);
-    assert(!previousPoint || point != *previousPoint);
+    auto point = parsePoint(xml_point, map);
+    if(previousPoint && point == *previousPoint)
+        printf("WARNING: duplicate consecutive points (id %d) while parsing bound after %d\n", point.id(), lineStringID_incrementor);
     previousPoint = point;
     boundary_points.push_back(point);
     if (pointID_incrementor != old_pointID_incrementor) no_new_points = false;
