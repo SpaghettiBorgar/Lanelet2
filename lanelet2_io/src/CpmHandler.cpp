@@ -86,19 +86,19 @@ LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<
     sort(usages1.begin(), usages1.end(), compareFunction);
     sort(usages2.begin(), usages2.end(), compareFunction);
 
-    std::cout << "Shared Usages 1: ";
-    for (int i = 0; i < usages1.size(); i++) std::cout << usages1[i].id() << " ";
-    std::cout << std::endl;
-    std::cout << "Shared Usages 2: ";
-    for (int i = 0; i < usages2.size(); i++) std::cout << usages2[i].id() << " ";
-    std::cout << std::endl;
+    // std::cout << "Shared Usages 1: ";
+    // for (int i = 0; i < usages1.size(); i++) std::cout << usages1[i].id() << " ";
+    // std::cout << std::endl;
+    // std::cout << "Shared Usages 2: ";
+    // for (int i = 0; i < usages2.size(); i++) std::cout << usages2[i].id() << " ";
+    // std::cout << std::endl;
 
     LineStrings3d usages;
     std::set_intersection(usages1.begin(), usages1.end(), usages2.begin(), usages2.end(), std::back_inserter(usages),
                           compareFunction);
-    std::cout << "Combined Usages: ";
-    for (int i = 0; i < usages.size(); i++) std::cout << usages[i].id() << " ";
-    std::cout << std::endl;
+    // std::cout << "Combined Usages: ";
+    // for (int i = 0; i < usages.size(); i++) std::cout << usages[i].id() << " ";
+    // std::cout << std::endl;
 
     if (usages.size() == 1) {
       linestring = usages.front();
@@ -117,14 +117,14 @@ LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<
     linestring = LineString3d(++lineStringID_incrementor, boundary_points, attributes);
     map->add(linestring);
   }
-  printf("lineString %d: no_new_points = %d\n", linestring.id(), no_new_points);
+  // printf("lineString %d: no_new_points = %d\n", linestring.id(), no_new_points);
 
   return linestring;
 }
 
 std::unique_ptr<LaneletMap> CpmParser::parse(const std::string& filename, ErrorMessages& errors) const {
   // read xml
-  std::cout << "parsing file " << filename << std::endl;
+  // std::cout << "parsing file " << filename << std::endl;
   pugi::xml_document doc;
   auto result = doc.load_file(filename.c_str());
   if (!result) throw lanelet::ParseError("Errors occured while parsing xml file: "s + result.description());
