@@ -9,9 +9,9 @@
 #include <sstream>
 #include <string>
 
+#include "lanelet2_core/utility/Optional.h"
 #include "lanelet2_io/Exceptions.h"
 #include "lanelet2_io/io_handlers/Factory.h"
-#include "lanelet2_core/utility/Optional.h"
 
 #define POINT_MERGE_DISTANCE 0.0005
 
@@ -20,23 +20,18 @@ using namespace std::string_literals;
 namespace lanelet {
 namespace io_handlers {
 
-using Errors = std::vector<std::string>;
-
 namespace {
 // register with factories
 RegisterParser<CpmParser> regParser;
 }  // namespace
 
+static const std::unordered_map<std::string, std::string> lanelet_type_map{{"urban", "road"}, {"highway", "highway"}};
+
 Id pointID_incrementor = 0;
 Id lineStringID_incrementor = 0;
-LaneletLayer::Map lanelets_;
-AreaLayer::Map areas_;
-RegulatoryElementLayer::Map regulatoryElements_;
-PolygonLayer::Map polygons_;
-LineStringLayer::Map lineStrings_;
-PointLayer::Map points_;
 
-Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map, Optional<Point3d> previousPoint) const {
+Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletMap>& map,
+                              Optional<Point3d> previousPoint) const {
   auto x = std::stod(xml_point.child("x").child_value());
   auto y = std::stod(xml_point.child("y").child_value());
   Point3d point = Point3d(InvalId, x, y, 0);
@@ -65,19 +60,21 @@ Point3d CpmParser::parsePoint(pugi::xml_node xml_point, std::unique_ptr<LaneletM
 
 LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<LaneletMap>& map) const {
   std::vector<Point3d> boundary_points;
-  bool no_new_points = true;
   LineString3d linestring;
-
   Optional<Point3d> previousPoint = {};
+  bool no_new_points = true;
+
   for (auto xml_point = xml_boundary.child("point"); xml_point; xml_point = xml_point.next_sibling("point")) {
     Id old_pointID_incrementor = pointID_incrementor;
     auto point = parsePoint(xml_point, map);
-    if(previousPoint && point == *previousPoint)
-        printf("WARNING: duplicate consecutive points (id %d) while parsing bound after %d\n", point.id(), lineStringID_incrementor);
+    if (previousPoint && point == *previousPoint)
+      printf("WARNING: duplicate consecutive points (id %d) while parsing bound after %d\n", point.id(),
+             lineStringID_incrementor);
     previousPoint = point;
     boundary_points.push_back(point);
     if (pointID_incrementor != old_pointID_incrementor) no_new_points = false;
   }
+
   auto lineMarking = xml_boundary.child("lineMarking").child_value();
   if (no_new_points) {
     // find the lanelet that uses the same start and end points
@@ -89,10 +86,10 @@ LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<
     sort(usages1.begin(), usages1.end(), compareFunction);
     sort(usages2.begin(), usages2.end(), compareFunction);
 
-    std::cout << "Vector 1: ";
+    std::cout << "Shared Usages 1: ";
     for (int i = 0; i < usages1.size(); i++) std::cout << usages1[i].id() << " ";
     std::cout << std::endl;
-    std::cout << "Vector 2: ";
+    std::cout << "Shared Usages 2: ";
     for (int i = 0; i < usages2.size(); i++) std::cout << usages2[i].id() << " ";
     std::cout << std::endl;
 
@@ -111,10 +108,11 @@ LineString3d CpmParser::parseBound(pugi::xml_node xml_boundary, std::unique_ptr<
       printf("WARNING: no_new_points is true but usage intersection has %d members\n", usages.size());
     }
   }
+
   if (linestring.id() == InvalId) {
     AttributeMap attributes;
+    // assumes only "solid" or "dashed" attributes are used for lineMarking
     attributes.insert(std::make_pair("type", "line_thin"));
-    // assumes only "solid" or "dashed" attributes are used
     attributes.insert(std::make_pair("subtype", lineMarking));
     linestring = LineString3d(++lineStringID_incrementor, boundary_points, attributes);
     map->add(linestring);
@@ -129,20 +127,16 @@ std::unique_ptr<LaneletMap> CpmParser::parse(const std::string& filename, ErrorM
   std::cout << "parsing file " << filename << std::endl;
   pugi::xml_document doc;
   auto result = doc.load_file(filename.c_str());
-  if (!result) {
-    throw lanelet::ParseError("Errors occured while parsing xml file: "s + result.description());
-  }
+  if (!result) throw lanelet::ParseError("Errors occured while parsing xml file: "s + result.description());
 
   std::unique_ptr<LaneletMap> map = std::make_unique<LaneletMap>();
-  auto xml_commonRoad = doc.child("commonRoad");
+
   try {
+    auto xml_commonRoad = doc.child("commonRoad");
     for (auto xml_lanelet = xml_commonRoad.child("lanelet"); xml_lanelet;
          xml_lanelet = xml_lanelet.next_sibling("lanelet")) {
       auto leftBound = parseBound(xml_lanelet.child("leftBound"), map);
       auto rightBound = parseBound(xml_lanelet.child("rightBound"), map);
-
-      static const std::unordered_map<std::string, std::string> lanelet_type_map{{"urban", "road"},
-                                                                                 {"highway", "highway"}};
 
       AttributeMap attributes;
       attributes.insert(std::make_pair("subtype", lanelet_type_map.at(xml_lanelet.child("laneletType").child_value())));
